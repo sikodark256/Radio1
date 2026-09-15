@@ -134,20 +134,43 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
 
 async function fetchCover(t){
   if(!t.title||t.title==="En vivo")return null;
+  const termino = encodeURIComponent(`${t.artist||""} ${t.title}`);
+
+  // 🥇 1. iTunes — PRIMERO (más estable)
+  try{
+    const r=await fetch(`https://itunes.apple.com/search?term=${termino}&limit=1&entity=song`,{cache:"no-store"});
+    if(r.ok){
+      const d=await r.json();
+      if(d.results&&d.results.length>0){
+        let url=d.results[0].artworkUrl100.replace("100x100bb.jpg","600x600bb.jpg");
+        cover=url;
+        coverEl.src=cover||LOGO;
+        console.log("✅ Carátula desde iTunes");
+        return cover;
+      }
+    }
+  }catch(e){console.log("iTunes falló, probando Deezer...");}
+
+  // 🥈 2. Deezer — SOLO como respaldo
   try{
     const q=encodeURIComponent((t.artist?'artist:"'+t.artist+'" ':"")+ 'track:"'+t.title+'"');
     const r=await fetch(DEEZER_URL+"?limit=1&q="+q,{cache:"no-store"});
     if(!r.ok) throw new Error("Deezer error");
     const d=await r.json(), tr=d.data&&d.data[0];
     const url=tr&&((tr.album&&tr.album.cover_xl)||(tr.album&&tr.album.cover_big)||(tr.album&&tr.album.cover_medium)||(tr.artist&&tr.artist.picture_big));
-    cover=url||null;
-    coverEl.src=cover||LOGO;
-    return cover;
-  }catch(e){
-    cover=null;
-    coverEl.src=LOGO;
-    return null;
-  }
+    if(url){
+      cover=url;
+      coverEl.src=cover||LOGO;
+      console.log("✅ Carátula desde Deezer");
+      return cover;
+    }
+  }catch(e){console.log("Deezer también falló");}
+
+  // ❌ Si las dos fallan → usa logo
+  cover=null;
+  coverEl.src=LOGO;
+  console.log("⚠️ Sin carátula, usando logo");
+  return null;
 }
 
 /* Metadata SSE: intento directo desde Zeno */
